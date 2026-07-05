@@ -71,56 +71,104 @@ def _file_size_mb(uf) -> float:
 # SIDEBAR
 # ─────────────────────────────────────────────
 def render_sidebar() -> None:
+    """
+    ChatGPT-style sidebar with three fixed zones:
+      TOP    — brand + New chat + Search  (never scrolls)
+      MIDDLE — navigation items + document list  (scrolls when overflow)
+      BOTTOM — user profile pill  (always pinned at bottom)
+    """
+    doc_library: dict = st.session_state.get("doc_library", {})
+    doc_count = len(doc_library)
+
+    # ── Build the scrollable middle section HTML ──────────────
+    # Nav items
+    nav_html = """
+        <div class='sb-nav-item'>
+            <span>💬</span><span>Chat</span>
+        </div>
+        <div class='sb-nav-item'>
+            <span>⚙️</span><span>Settings</span>
+        </div>
+    """
+
+    # Documents section label + list
+    if doc_library:
+        doc_items = "".join(
+            f"""<div class='sb-doc-item{"  active" if i == 0 else ""}'>
+                    <span class='sb-doc-icon'>📄</span>
+                    <span class='sb-doc-name'>{fname if len(fname) <= 30 else fname[:27] + "…"}</span>
+                </div>"""
+            for i, fname in enumerate(doc_library)
+        )
+        docs_section = f"""
+            <div class='sb-section-label'>📁 Documents &nbsp;
+                <span style='color:#10a37f;font-weight:700;'>{doc_count}</span>
+            </div>
+            {doc_items}
+        """
+    else:
+        docs_section = """
+            <div class='sb-section-label'>📁 Documents</div>
+            <div style='padding:8px 10px;font-size:0.82rem;color:#8e8ea0;'>
+                No documents uploaded yet
+            </div>
+        """
+
+    # ── System status (inside scrollable middle) ──────────────
+    status_html = """
+        <div class='sb-section-label'>System Status</div>
+        <div class='sb-doc-item' style='cursor:default;'>
+            <span>🟢</span><span>Gemini API</span>
+        </div>
+        <div class='sb-doc-item' style='cursor:default;'>
+            <span>🟢</span><span>FAISS Vector DB</span>
+        </div>
+        <div class='sb-doc-item' style='cursor:default;'>
+            <span>🟢</span><span>Embedding Model</span>
+        </div>
+    """
+
+    # ── Assemble full sidebar HTML ────────────────────────────
+    sidebar_html = f"""
+    <!-- TOP: brand + actions — fixed, never scrolls -->
+    <div class='sb-top'>
+        <div class='sb-brand'>
+            <div class='sb-brand-title'>
+                <div class='sb-brand-icon'>📚</div>
+                AI Document Assistant
+            </div>
+        </div>
+        <div class='sb-action'>
+            <span class='sb-action-icon'>✏️</span>
+            <span>New Session</span>
+        </div>
+        <div class='sb-action'>
+            <span class='sb-action-icon'>🔍</span>
+            <span>Search documents</span>
+        </div>
+    </div>
+
+    <!-- MIDDLE: nav + docs + status — scrollable when overflow -->
+    <div class='sb-middle'>
+        {nav_html}
+        {docs_section}
+        {status_html}
+    </div>
+
+    <!-- BOTTOM: user profile — always pinned -->
+    <div class='sb-bottom'>
+        <div class='sb-user'>
+            <div class='sb-avatar'>AA</div>
+            <div class='sb-user-info'>
+                <div class='sb-user-name'>Aditya Anand</div>
+                <div class='sb-user-sub'>v1.0 · Celebal Internship</div>
+            </div>
+        </div>
+    </div>
+    """
+
     with st.sidebar:
-        # ── Brand ─────────────────────────────
-        st.markdown(
-            "<h2 style='margin-bottom:0;'>📚 AI Document Assistant</h2>",
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            "<p style='color:#8e8ea0;font-size:0.8rem;margin-top:4px;'>"
-            "Powered by Gemini + FAISS</p>",
-            unsafe_allow_html=True,
-        )
-        st.divider()
-
-        # ── Navigation ────────────────────────
-        st.markdown("**Navigation**")
-        st.markdown("&nbsp;&nbsp;💬 &nbsp;Chat", unsafe_allow_html=True)
-        st.markdown("&nbsp;&nbsp;📁 &nbsp;Documents", unsafe_allow_html=True)
-
-        # Live document list under Documents
-        doc_library: dict = st.session_state.get("doc_library", {})
-        if doc_library:
-            for fname in doc_library:
-                short = fname if len(fname) <= 28 else fname[:25] + "…"
-                st.markdown(
-                    f"<div class='sidebar-doc'>📄 {short}</div>",
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.markdown(
-                "<p style='color:#8e8ea0;font-size:0.8rem;"
-                "padding-left:1.4rem;'>No documents yet</p>",
-                unsafe_allow_html=True,
-            )
-
-        st.markdown("&nbsp;&nbsp;⚙️ &nbsp;Settings", unsafe_allow_html=True)
-        st.divider()
-
-        # ── System Status ─────────────────────
-        st.markdown("**System Status**")
-        st.success("✅ Gemini API")
-        st.success("✅ FAISS Vector DB")
-        st.success("✅ Embedding Model")
-        st.divider()
-
-        # ── Info ──────────────────────────────
-        st.markdown(
-            "<p style='color:#8e8ea0;font-size:0.78rem;'>"
-            "v1.0 &nbsp;·&nbsp; Aditya Anand</p>",
-            unsafe_allow_html=True,
-        )
+        st.markdown(sidebar_html, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
 # UPLOAD QUEUE PANEL
