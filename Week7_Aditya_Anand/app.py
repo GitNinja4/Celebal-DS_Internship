@@ -1,10 +1,11 @@
 """
 AI Document Assistant - Streamlit Entry Point
-Phase 3: PDF upload and document management.
+Phase 3 (upgraded): Multi-PDF upload and document library.
 Developer: Aditya Anand
 """
 
 import streamlit as st
+import pandas as pd
 from rag.pdf_loader import PDFLoader
 
 # ─────────────────────────────────────────────
@@ -19,136 +20,167 @@ st.set_page_config(
 
 
 # ─────────────────────────────────────────────
+# SESSION STATE INIT
+# ─────────────────────────────────────────────
+def init_session_state() -> None:
+    """
+    Initialise persistent session state keys on first load.
+    Rebuilds the document library from disk so it survives page refreshes.
+    """
+    if "doc_library" not in st.session_state:
+        # dict keyed by filename → metadata dict, rebuilt from uploads/ on startup
+        loader = PDFLoader()
+        existing = loader.get_all_uploaded_docs()
+        st.session_state["doc_library"] = {
+            doc["filename"]: doc for doc in existing
+        }
+
+
+# ─────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────
-def render_sidebar():
+def render_sidebar() -> None:
+    """Sidebar: branding, navigation, uploaded doc list, system status, info."""
     with st.sidebar:
-        # Branding
         st.markdown("## 📚 AI Document Assistant")
         st.divider()
 
-        # Navigation (display only — routing to be wired in later phases)
+        # ── Navigation ────────────────────────
         st.markdown("**Navigation**")
         st.markdown("• Chat")
+
+        # Documents section with live file list
         st.markdown("• Documents")
+        doc_library: dict = st.session_state.get("doc_library", {})
+        if doc_library:
+            for fname in doc_library:
+                st.markdown(f"  &nbsp;&nbsp;📄 {fname}")
+        else:
+            st.markdown("  &nbsp;&nbsp;*No documents uploaded yet.*")
+
         st.markdown("• Settings")
         st.divider()
 
-        # System Status
+        # ── System Status ─────────────────────
         st.markdown("**System Status**")
         st.success("✅ Gemini API")
         st.success("✅ FAISS Vector DB")
         st.success("✅ Embedding Model")
         st.divider()
 
-        # Project Information
+        # ── Project Info ──────────────────────
         st.markdown("**Project Information**")
         st.markdown("**Version:** v1.0")
         st.markdown("**Developer:** Aditya Anand")
 
 
 # ─────────────────────────────────────────────
-# LEFT COLUMN — Upload & Document Info
+# LEFT COLUMN — Upload + Document Library
 # ─────────────────────────────────────────────
-def render_upload_section():
+def render_upload_section() -> None:
     """
-    Renders the PDF upload widget and Document Information panel.
-    Handles save, duplicate detection, validation errors, and metadata display.
+    Multi-file uploader, per-file status messages, upload summary,
+    and the full Document Library table.
     """
     loader = PDFLoader()
 
-    # ── Upload Document container ──────────────
+    # ── Upload container ──────────────────────
     with st.container(border=True):
-        st.subheader("📄 Upload Document")
+        st.subheader("📄 Upload Documents")
 
-        # Streamlit file uploader — PDF only
-        uploaded_file = st.file_uploader(
-            label="Choose a PDF file",
+        uploaded_files = st.file_uploader(
+            label="Choose one or more PDF files",
             type=["pdf"],
-            help="Upload a PDF document to index and query.",
+            accept_multiple_files=True,
+            help="Select multiple PDFs to upload at once.",
         )
 
-        if uploaded_file is None:
-            st.info("No PDF uploaded.")
+        if not uploaded_files:
+            st.info("No PDFs uploaded yet. Select one or more files above.")
 
-    # ── Process upload when a file is present ──
-    metadata = None
+    # ── Process every uploaded file ───────────
+    if uploaded_files:
+        results = loader.save_multiple_files(uploaded_files)
 
-    if uploaded_file is not None:
-        try:
-            # Track filenames saved in this browser session
-            if "saved_files" not in st.session_state:
-                st.session_state["saved_files"] = set()
+        # Tally outcomes
+        n_uploaded  = sum(1 for r in results if r.status == "uploaded")
+        n_duplicate = sum(1 for r in results if r.status == "duplicate")
+        n_failed    = sum(1 for r in results if r.status == "error")
 
-            filename_candidate: str = uploaded_file.name
-            dest_path = loader.upload_dir / filename_candidate
-
-            # Duplicate: file already on disk (from a previous session or run)
-            is_duplicate: bool = dest_path.exists()
-
-            # save_uploaded_file will not overwrite; returns the path either way
-            file_path, filename = loader.save_uploaded_file(uploaded_file)
-
-            if is_duplicate:
-                st.warning("⚠️ This document already exists. Showing existing file.")
+        # Per-file feedback
+        for result in results:
+            if result.status == "uploaded":
+                st.success(f"✅ **{result.filename}** — saved successfully.")
+                # Add to session-state library
+                st.session_state["doc_library"][result.filename] = {
+                    "filename": result.filename,
+                    "size_mb":  result.size_mb,
+                    "status":   "Uploaded",
+                    "path":     str(result.file_path),
+                }
+            elif result.status == "duplicate":
+                st.warning(f"⚠️ **{result.filename}** — already exists.")
             else:
-                st.success("✅ PDF uploaded successfully. Ready for text extraction.")
-                st.session_state["saved_files"].add(filename)
+                st.error(f"❌ **{result.filename}** — {result.message}")
 
-            # Fetch metadata for display
-            metadata = loader.get_pdf_metadata(file_path)
-            metadata["path"] = str(file_path)
+        # ── Upload Summary ─────────────────────
+        with st.container(border=True):
+            st.subheader("📊 Upload Summary")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("✔ Successfully Uploaded", n_uploaded)
+            col2.metric("⚠ Already Exists",        n_duplicate)
+            col3.metric("❌ Failed",                n_failed)
 
-        except ValueError as exc:
-            # Wrong file type — guards against programmatic misuse
-            st.error(f"❌ Invalid file: {exc}")
-        except (IOError, FileNotFoundError) as exc:
-            st.error(f"❌ File error: {exc}")
-
-    # ── Document Information container ─────────
+    # ── Document Library ──────────────────────
     with st.container(border=True):
-        st.subheader("📋 Document Information")
+        st.subheader("📚 Document Library")
 
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown("**Filename:**")
-            st.markdown("**Pages:**")
-            st.markdown("**Size (MB):**")
-            st.markdown("**Status:**")
-            st.markdown("**Path:**")
+        doc_library: dict = st.session_state.get("doc_library", {})
 
-        with col_b:
-            if metadata:
-                st.markdown(metadata["filename"])
-                st.markdown("—")          # Page count added in Phase 4
-                st.markdown(str(metadata["size_mb"]))
-                st.markdown(f"✅ {metadata['status']}")
-                st.markdown(f"`{metadata['path']}`")
+        if not doc_library:
+            st.info("Your document library is empty. Upload PDFs to get started.")
+        else:
+            # Build a clean display DataFrame
+            rows = []
+            for doc in doc_library.values():
+                rows.append({
+                    "Filename":      doc["filename"],
+                    "Size (MB)":     doc["size_mb"],
+                    "Status":        doc["status"],
+                    "Storage Path":  doc["path"],
+                })
 
-                st.info("📌 PDF uploaded successfully. Ready for text extraction.")
-            else:
-                st.markdown("—")
-                st.markdown("—")
-                st.markdown("—")
-                st.markdown("⏳ Waiting for upload")
-                st.markdown("—")
-
-    return uploaded_file
+            df = pd.DataFrame(rows)
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Filename":     st.column_config.TextColumn("Filename"),
+                    "Size (MB)":    st.column_config.NumberColumn("Size (MB)", format="%.3f"),
+                    "Status":       st.column_config.TextColumn("Status"),
+                    "Storage Path": st.column_config.TextColumn("Storage Path"),
+                },
+            )
 
 
 # ─────────────────────────────────────────────
 # RIGHT COLUMN — System Overview & Workflow
 # ─────────────────────────────────────────────
-def render_system_overview():
-    # System Overview container
+def render_system_overview() -> None:
+    """System metrics (dynamic doc count) and static RAG workflow pipeline."""
+
+    doc_count = len(st.session_state.get("doc_library", {}))
+
+    # ── System Overview ───────────────────────
     with st.container(border=True):
         st.subheader("🖥️ System Overview")
 
         col_a, col_b = st.columns(2)
         with col_a:
-            st.metric(label="Documents Indexed", value=0)
+            st.metric(label="Documents Uploaded", value=doc_count)
         with col_b:
-            st.metric(label="Total Chunks", value=0)
+            st.metric(label="Total Chunks", value=0)   # populated in Phase 4
 
         st.divider()
 
@@ -156,16 +188,16 @@ def render_system_overview():
         st.markdown("**Vector Store:** FAISS")
         st.markdown("**LLM:** Gemini")
 
-    # Workflow container
+    # ── Workflow pipeline ─────────────────────
     with st.container(border=True):
         st.subheader("🔄 Workflow")
 
         pipeline_steps = [
             "📤 Upload PDF",
             "📝 Extract Text",
-            "✂️ Chunk Text",
+            "✂️  Chunk Text",
             "🔢 Generate Embeddings",
-            "🗄️ Store in FAISS",
+            "🗄️  Store in FAISS",
             "❓ Ask Questions",
             "🔍 Retrieve Context",
             "💬 Generate Answer",
@@ -174,23 +206,27 @@ def render_system_overview():
         for i, step in enumerate(pipeline_steps):
             st.markdown(step)
             if i < len(pipeline_steps) - 1:
-                st.markdown("<p style='margin:0; color:gray;'>↓</p>", unsafe_allow_html=True)
+                st.markdown(
+                    "<p style='margin:0; color:gray;'>↓</p>",
+                    unsafe_allow_html=True,
+                )
 
 
 # ─────────────────────────────────────────────
-# MAIN PAGE
+# MAIN
 # ─────────────────────────────────────────────
-def main():
+def main() -> None:
+    init_session_state()
     render_sidebar()
 
-    # Hero section
+    # Hero
     st.title("📚 AI Document Assistant")
     st.markdown(
         "##### Chat with your PDFs using Retrieval-Augmented Generation (RAG)"
     )
     st.divider()
 
-    # Two-column layout: 70 / 30 split
+    # 70 / 30 column split
     left_col, right_col = st.columns([0.7, 0.3])
 
     with left_col:
