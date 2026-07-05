@@ -168,6 +168,14 @@ def render_upload_panel() -> None:
             )
 
             to_remove = []
+
+            # Scrollable queue list — caps at 240px then scrolls internally
+            st.markdown(
+                "<div style='max-height:240px;overflow-y:auto;overflow-x:hidden;"
+                "padding-right:4px;margin-bottom:8px;'>",
+                unsafe_allow_html=True,
+            )
+
             for idx, uf in enumerate(queue):
                 size_mb = _file_size_mb(uf)
                 col_card, col_btn = st.columns([0.88, 0.12])
@@ -189,6 +197,9 @@ def render_upload_panel() -> None:
                         to_remove.append(idx)
 
             # Apply removals (reverse order to keep indices valid)
+            # Close scrollable queue wrapper first
+            st.markdown("</div>", unsafe_allow_html=True)
+
             for idx in sorted(to_remove, reverse=True):
                 st.session_state["upload_queue"].pop(idx)
             if to_remove:
@@ -316,6 +327,13 @@ def render_doc_library() -> None:
         # ── Remove-from-library buttons ────────
         to_delete: list[str] = []
 
+        # Scrollable list wrapper — max 340px, then internal scroll
+        st.markdown(
+            "<div style='max-height:340px;overflow-y:auto;overflow-x:hidden;"
+            "padding-right:4px;'>",
+            unsafe_allow_html=True,
+        )
+
         for doc in doc_library.values():
             size_str = _size_label(doc["size_mb"])
             short_path = "uploads/" + doc["filename"]
@@ -337,6 +355,9 @@ def render_doc_library() -> None:
                 st.markdown("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
                 if st.button("🗑", key=f"del_{doc['filename']}", help=f"Remove {doc['filename']} from library"):
                     to_delete.append(doc["filename"])
+
+        # Close the scrollable wrapper
+        st.markdown("</div>", unsafe_allow_html=True)
 
         for fname in to_delete:
             del st.session_state["doc_library"][fname]
@@ -408,25 +429,29 @@ def main() -> None:
     init_session_state()
     render_sidebar()
 
-    # ── Hero ───────────────────────────────────
+    # ── Hero (fixed at top, outside the scrollable columns) ──
     st.markdown(
-        "<h1 style='margin-bottom:0;'>📚 AI Document Assistant</h1>",
+        "<h1 style='margin-bottom:0;padding-bottom:0;'>📚 AI Document Assistant</h1>",
         unsafe_allow_html=True,
     )
     st.markdown(
-        "<p style='color:#8e8ea0;font-size:1rem;margin-top:4px;margin-bottom:16px;'>"
+        "<p style='color:#8e8ea0;font-size:0.95rem;margin-top:2px;margin-bottom:10px;'>"
         "Chat with your PDFs using Retrieval-Augmented Generation (RAG)</p>",
         unsafe_allow_html=True,
     )
     st.divider()
 
-    # ── Layout: 65 / 35 ───────────────────────
+    # ── Two-column layout ─────────────────────
+    # Left (65%) scrolls when content overflows.
+    # Right (35%) is sticky — never moves as left grows.
     left, right = st.columns([0.65, 0.35], gap="large")
 
     with left:
         render_upload_panel()
         st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
         render_doc_library()
+        # Bottom padding so last card isn't flush against the scroll boundary
+        st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
 
     with right:
         render_right_panel()

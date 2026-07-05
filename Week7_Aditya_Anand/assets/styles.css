@@ -8,19 +8,77 @@ html, body, [data-testid="stAppViewContainer"] {
     background-color: #212121 !important;
     color: #ececec !important;
     font-family: 'Söhne', 'ui-sans-serif', 'system-ui', sans-serif;
+    /* Full viewport height so columns can be sized against it */
+    height: 100vh;
+    overflow: hidden;
 }
 
-[data-testid="stMain"], .main .block-container {
+/* Main content wrapper — fill height, no outer scroll */
+[data-testid="stMain"] {
     background-color: #212121 !important;
-    padding-top: 1.5rem;
-    padding-bottom: 2rem;
-    max-width: 1200px;
+    height: 100vh;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.main .block-container {
+    background-color: #212121 !important;
+    padding-top: 1.2rem !important;
+    padding-bottom: 0 !important;
+    max-width: 100% !important;
+    /* Fill remaining height after the hero header */
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Two-column row: fill height, clip outer scroll ─────── */
+[data-testid="stHorizontalBlock"] {
+    flex: 1 !important;
+    min-height: 0 !important;          /* critical — lets flex children shrink */
+    align-items: stretch !important;
+}
+
+/* Every direct column wrapper */
+[data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* ── LEFT column — scrolls independently ────────────────── */
+[data-testid="stHorizontalBlock"]
+  > [data-testid="stVerticalBlock"]:first-child {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding-right: 6px;
+    /* Give the scrollable area a max height based on the viewport */
+    max-height: calc(100vh - 160px);
+}
+
+/* ── RIGHT column — sticky, never scrolls ───────────────── */
+[data-testid="stHorizontalBlock"]
+  > [data-testid="stVerticalBlock"]:last-child {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    max-height: calc(100vh - 160px);
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────── */
 [data-testid="stSidebar"] {
     background-color: #171717 !important;
     border-right: 1px solid #2f2f2f;
+    /* Sidebar is always full-height and internally scrollable */
+    height: 100vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 [data-testid="stSidebar"] * {
@@ -158,10 +216,18 @@ hr {
 }
 
 /* ── Scrollbar ───────────────────────────────────────────── */
-::-webkit-scrollbar       { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #171717; }
-::-webkit-scrollbar-thumb { background: #4f4f4f; border-radius: 3px; }
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f3f3f; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #10a37f; }
+
+/* Column-specific scroll tracks blend into the dark bg */
+[data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]::-webkit-scrollbar-track {
+    background: #212121;
+}
+[data-testid="stSidebar"]::-webkit-scrollbar-track {
+    background: #171717;
+}
 
 /* ── File chip cards (injected via st.markdown) ──────────── */
 .file-chip {
