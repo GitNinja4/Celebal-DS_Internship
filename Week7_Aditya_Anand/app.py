@@ -1,6 +1,6 @@
 """
-AI Document Assistant — Streamlit Entry Point
-Dark ChatGPT-style UI. Sidebar: sticky top+bottom, scrollable middle.
+AI Document Assistant — RAG System
+ChatGPT-style UI: dark, minimal, centered.
 Developer: Aditya Anand
 """
 
@@ -16,431 +16,446 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-_CSS_PATH = Path(__file__).parent / "assets" / "styles.css"
+_CSS = Path(__file__).parent / "assets" / "styles.css"
 
-# ── CSS injection ────────────────────────────────────────────
-def inject_css() -> None:
-    if _CSS_PATH.exists():
-        st.markdown(
-            f"<style>{_CSS_PATH.read_text(encoding='utf-8')}</style>",
-            unsafe_allow_html=True,
-        )
 
-# ── Session state ────────────────────────────────────────────
-def init_session_state() -> None:
+# ════════════════════════════════════════════════════════════
+# Bootstrap
+# ════════════════════════════════════════════════════════════
+def _css():
+    if _CSS.exists():
+        st.markdown(f"<style>{_CSS.read_text(encoding='utf-8')}</style>",
+                    unsafe_allow_html=True)
+
+
+def _init():
     loader = PDFLoader()
     if "doc_library" not in st.session_state:
         st.session_state["doc_library"] = {
             d["filename"]: d for d in loader.get_all_uploaded_docs()
         }
-    if "upload_queue"  not in st.session_state:
-        st.session_state["upload_queue"]  = []
-    if "last_results"  not in st.session_state:
-        st.session_state["last_results"]  = []
+    for key in ("upload_queue", "last_results", "active_view"):
+        if key not in st.session_state:
+            st.session_state[key] = [] if key != "active_view" else "home"
 
-# ── Helpers ──────────────────────────────────────────────────
-def _size_label(mb: float) -> str:
-    return f"{mb * 1024:.0f} KB" if mb < 1 else f"{mb:.2f} MB"
 
-def _file_mb(uf) -> float:
+# ════════════════════════════════════════════════════════════
+# Helpers
+# ════════════════════════════════════════════════════════════
+def _sz(mb: float) -> str:
+    return f"{mb*1024:.0f} KB" if mb < 1 else f"{mb:.2f} MB"
+
+
+def _fmb(uf) -> float:
     return round(len(uf.getvalue()) / (1024 * 1024), 3)
 
-# ════════════════════════════════════════════════════════════
-# SIDEBAR
-# The correct ChatGPT pattern inside Streamlit:
-#   • Sticky top  → position:sticky; top:0   (brand + actions)
-#   • Middle      → plain flow — Streamlit's OWN sidebar scroll handles this
-#   • Sticky bot  → position:sticky; bottom:0  (user profile)
-# Do NOT set overflow:hidden on the sidebar — that kills scrolling.
-# ════════════════════════════════════════════════════════════
-def render_sidebar() -> None:
-    """
-    ChatGPT-style sidebar:
-      • First child  → sticky top  (brand + actions)
-      • Middle       → scrollable  (nav + live doc list + status)
-      • Last child   → sticky bot  (user profile)
 
-    Each zone is ONE st.markdown call so CSS :first-child / :last-child
-    can pin them. The middle uses a <div class='sb-scroll-middle'> which
-    the CSS gives flex:1 + overflow-y:auto.
-    """
-    doc_library: dict = st.session_state.get("doc_library", {})
-    n = len(doc_library)
+# ════════════════════════════════════════════════════════════
+# SIDEBAR  — sticky top + scrollable middle + sticky bottom
+# ════════════════════════════════════════════════════════════
+def sidebar():
+    docs: dict = st.session_state.get("doc_library", {})
+    n = len(docs)
 
-    # Build the document rows HTML from live session state
-    if doc_library:
-        doc_rows_html = "".join(
-            f"""<div style="display:flex;align-items:center;gap:9px;
-                            padding:8px 10px;border-radius:8px;font-size:0.85rem;
-                            color:{'#ffffff' if i==0 else '#c5c5c5'};
-                            background:{'#2f2f2f' if i==0 else 'transparent'};
-                            font-weight:{'500' if i==0 else '400'};
-                            margin-bottom:1px;cursor:pointer;
-                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                  <span style="flex-shrink:0;">📄</span>
-                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                      {fname if len(fname)<=26 else fname[:23]+'…'}
-                  </span>
-                </div>"""
-            for i, fname in enumerate(doc_library)
-        )
-    else:
-        doc_rows_html = (
-            "<div style='padding:5px 10px 8px;font-size:0.82rem;color:#8e8ea0;'>"
-            "No documents yet</div>"
-        )
+    # Build doc list HTML
+    doc_html = "".join(
+        f"""<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+                        border-radius:8px;font-size:.84rem;
+                        color:{'#fff' if i==0 else '#b4b4b4'};
+                        background:{'#2f2f2f' if i==0 else 'transparent'};
+                        margin-bottom:1px;cursor:pointer;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+                        transition:background .15s;"
+             onmouseover="if(this.style.background!='#2f2f2f')this.style.background='#242424'"
+             onmouseout="if(this.style.background!='#2f2f2f')this.style.background='transparent'">
+              <span style="flex-shrink:0;font-size:.9rem;">📄</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                  {f if len(f)<=24 else f[:21]+'…'}
+              </span>
+            </div>"""
+        for i, f in enumerate(docs)
+    ) if docs else "<div style='padding:6px 10px;font-size:.81rem;color:#666;'>No documents yet</div>"
 
     with st.sidebar:
-
-        # ── 1. STICKY TOP ────────────────────────────────────
+        # ── Sticky top ──────────────────────────────────────
         st.markdown(
-            """<div style="position:sticky;top:0;z-index:100;
-                           background:#171717;padding:16px 6px 10px 6px;
-                           border-bottom:1px solid #2a2a2a;">
-                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                   <div style="width:34px;height:34px;background:#10a37f;border-radius:50%;
-                               display:flex;align-items:center;justify-content:center;
-                               font-size:1.1rem;flex-shrink:0;">📚</div>
-                   <span style="font-size:0.96rem;font-weight:700;color:#ececec;">
-                     AI Document Assistant
-                   </span>
-                 </div>
-                 <div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
-                             border-radius:8px;font-size:0.87rem;color:#c5c5c5;
-                             cursor:pointer;margin-bottom:2px;">
-                   <span>✏️</span><span>New Session</span>
-                 </div>
-                 <div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
-                             border-radius:8px;font-size:0.87rem;color:#c5c5c5;
-                             cursor:pointer;">
-                   <span>🔍</span><span>Search documents</span>
-                 </div>
-               </div>""",
+            """<div style="position:sticky;top:0;z-index:200;background:#171717;
+                           padding:14px 10px 10px;border-bottom:1px solid #2a2a2a;">
+
+              <!-- Brand -->
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px;">
+                <div style="width:32px;height:32px;background:#10a37f;border-radius:8px;
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:1rem;flex-shrink:0;">📚</div>
+                <span style="font-size:.94rem;font-weight:700;color:#ececec;
+                             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  AI Doc Assistant
+                </span>
+              </div>
+
+              <!-- New Session -->
+              <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;
+                          border-radius:8px;font-size:.85rem;color:#c5c5c5;
+                          cursor:pointer;margin-bottom:2px;
+                          border:1px solid #2e2e2e;transition:background .15s;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                <span>✏️</span><span>New Session</span>
+              </div>
+
+              <!-- Search -->
+              <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;
+                          border-radius:8px;font-size:.85rem;color:#c5c5c5;
+                          cursor:pointer;transition:background .15s;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                <span>🔍</span><span>Search documents</span>
+              </div>
+            </div>""",
             unsafe_allow_html=True,
         )
 
-        # ── 2. SCROLLABLE MIDDLE ─────────────────────────────
+        # ── Scrollable middle ───────────────────────────────
         st.markdown(
-            f"""<div style="padding:8px 6px;">
+            f"""<div style="padding:10px 10px 4px;">
 
-                  <!-- Navigation -->
-                  <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
-                               text-transform:uppercase;letter-spacing:0.07em;
-                               padding:8px 8px 4px 8px;">Navigation</div>
-                  <div style="display:flex;align-items:center;gap:9px;
-                              padding:8px 10px;border-radius:8px;font-size:0.86rem;
-                              color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
-                    💬 &nbsp;Chat
-                  </div>
-                  <div style="display:flex;align-items:center;gap:9px;
-                              padding:8px 10px;border-radius:8px;font-size:0.86rem;
-                              color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
-                    ⚙️ &nbsp;Settings
-                  </div>
+              <!-- Nav section -->
+              <div style="font-size:.68rem;font-weight:600;color:#666;text-transform:uppercase;
+                           letter-spacing:.07em;padding:6px 4px 4px;">Navigation</div>
 
-                  <!-- Documents -->
-                  <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
-                               text-transform:uppercase;letter-spacing:0.07em;
-                               padding:12px 8px 4px 8px;">
-                    📁 Documents
-                    <span style="color:#10a37f;margin-left:5px;font-weight:700;">{n}</span>
-                  </div>
-                  {doc_rows_html}
+              <div style="display:flex;align-items:center;gap:9px;padding:7px 10px;
+                          border-radius:8px;font-size:.85rem;color:#c5c5c5;
+                          cursor:pointer;margin-bottom:1px;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                💬 &nbsp;Chat
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:7px 10px;
+                          border-radius:8px;font-size:.85rem;color:#c5c5c5;
+                          cursor:pointer;margin-bottom:1px;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                📁 &nbsp;Documents
+              </div>
+              <div style="display:flex;align-items:center;gap:9px;padding:7px 10px;
+                          border-radius:8px;font-size:.85rem;color:#c5c5c5;
+                          cursor:pointer;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                ⚙️ &nbsp;Settings
+              </div>
 
-                  <!-- System Status -->
-                  <div style="border-top:1px solid #2a2a2a;margin-top:8px;padding-top:4px;">
-                    <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
-                                 text-transform:uppercase;letter-spacing:0.07em;
-                                 padding:8px 8px 4px 8px;">System Status</div>
-                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
-                        🟢 Gemini API
-                    </div>
-                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
-                        🟢 FAISS Vector DB
-                    </div>
-                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
-                        🟢 Embedding Model
-                    </div>
-                  </div>
+              <!-- Documents section -->
+              <div style="font-size:.68rem;font-weight:600;color:#666;text-transform:uppercase;
+                           letter-spacing:.07em;padding:14px 4px 4px;">
+                Uploaded Documents
+                <span style="color:#10a37f;margin-left:4px;font-weight:700;">{n}</span>
+              </div>
+              {doc_html}
 
-                  <!-- Bottom spacer so sticky-bottom doesn't overlap content -->
-                  <div style="height:80px;"></div>
-                </div>""",
+              <!-- Status section -->
+              <div style="border-top:1px solid #2a2a2a;margin-top:10px;padding-top:6px;">
+                <div style="font-size:.68rem;font-weight:600;color:#666;text-transform:uppercase;
+                             letter-spacing:.07em;padding:4px 4px 4px;">Status</div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;
+                            font-size:.83rem;color:#a7f3d0;">
+                  <span style="color:#10a37f;">●</span> Gemini API
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;
+                            font-size:.83rem;color:#a7f3d0;">
+                  <span style="color:#10a37f;">●</span> FAISS Ready
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;
+                            font-size:.83rem;color:#a7f3d0;">
+                  <span style="color:#10a37f;">●</span> Embeddings OK
+                </div>
+              </div>
+
+              <!-- Spacer so sticky bottom doesn't overlap last item -->
+              <div style="height:72px;"></div>
+            </div>""",
             unsafe_allow_html=True,
         )
 
-        # ── 3. STICKY BOTTOM ─────────────────────────────────
+        # ── Sticky bottom ───────────────────────────────────
         st.markdown(
-            """<div style="position:sticky;bottom:0;z-index:100;
-                           background:#171717;padding:10px 6px 16px 6px;
-                           border-top:1px solid #2a2a2a;">
-                 <div style="display:flex;align-items:center;gap:10px;
-                             padding:7px 8px;border-radius:10px;cursor:pointer;">
-                   <div style="width:34px;height:34px;
-                               background:linear-gradient(135deg,#10a37f,#0d6efd);
-                               border-radius:50%;display:flex;align-items:center;
-                               justify-content:center;font-size:0.82rem;
-                               font-weight:700;color:#fff;flex-shrink:0;">AA</div>
-                   <div style="min-width:0;">
-                     <div style="font-size:0.87rem;font-weight:600;color:#ececec;">
-                       Aditya Anand
-                     </div>
-                     <div style="font-size:0.71rem;color:#8e8ea0;margin-top:1px;">
-                       v1.0 · Celebal Internship
-                     </div>
-                   </div>
-                 </div>
-               </div>""",
+            """<div style="position:sticky;bottom:0;z-index:200;background:#171717;
+                           padding:10px 10px 14px;border-top:1px solid #2a2a2a;">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;
+                          border-radius:10px;cursor:pointer;transition:background .15s;"
+                   onmouseover="this.style.background='#242424'"
+                   onmouseout="this.style.background='transparent'">
+                <div style="width:32px;height:32px;
+                            background:linear-gradient(135deg,#10a37f,#1d4ed8);
+                            border-radius:50%;display:flex;align-items:center;
+                            justify-content:center;font-size:.8rem;font-weight:700;
+                            color:#fff;flex-shrink:0;">AA</div>
+                <div style="min-width:0;">
+                  <div style="font-size:.85rem;font-weight:600;color:#ececec;">Aditya Anand</div>
+                  <div style="font-size:.70rem;color:#666;margin-top:1px;">Celebal DS Internship</div>
+                </div>
+              </div>
+            </div>""",
             unsafe_allow_html=True,
         )
+
 
 # ════════════════════════════════════════════════════════════
-# UPLOAD PANEL  — two-stage: stage → remove → commit
+# HOME VIEW  — centered, clean, ChatGPT-style
 # ════════════════════════════════════════════════════════════
-def render_upload_panel() -> None:
+def view_home():
     loader = PDFLoader()
 
-    with st.container(border=True):
-        st.markdown("### 📤 Upload Documents")
-        st.markdown(
-            "<p style='color:#8e8ea0;font-size:0.84rem;margin-top:-6px;'>"
-            "Pick PDFs · Remove mistakes · Click Upload</p>",
-            unsafe_allow_html=True,
-        )
+    # ── Centered welcome header ──────────────────────────────
+    st.markdown(
+        """<div style="text-align:center;padding:3rem 1rem 1.5rem;">
+             <div style="font-size:2.1rem;font-weight:700;color:#ececec;
+                         margin-bottom:.4rem;">What can I help with?</div>
+             <div style="font-size:.97rem;color:#8e8ea0;">
+               Upload PDFs · Ask questions · Get AI-powered answers
+             </div>
+           </div>""",
+        unsafe_allow_html=True,
+    )
 
-        picked = st.file_uploader(
-            "PDF files",
-            type=["pdf"],
-            accept_multiple_files=True,
-            label_visibility="collapsed",
-        )
+    # ── Centered upload bar ──────────────────────────────────
+    _, mid, _ = st.columns([1, 2.5, 1])
+    with mid:
+        with st.container(border=True):
+            picked = st.file_uploader(
+                "Drop PDFs here or click to browse",
+                type=["pdf"],
+                accept_multiple_files=True,
+                label_visibility="visible",
+            )
+            if picked:
+                existing = {f.name for f in st.session_state["upload_queue"]}
+                for f in picked:
+                    if f.name not in existing:
+                        st.session_state["upload_queue"].append(f)
+                        existing.add(f.name)
 
-        # Merge into queue without duplicates
-        if picked:
-            existing = {f.name for f in st.session_state["upload_queue"]}
-            for f in picked:
-                if f.name not in existing:
-                    st.session_state["upload_queue"].append(f)
-                    existing.add(f.name)
-
+        # Queue & actions
         queue: list = st.session_state["upload_queue"]
-
         if queue:
             st.markdown(
-                f"<p style='color:#8e8ea0;font-size:0.8rem;margin:6px 0 4px;'>"
-                f"{len(queue)} file(s) staged</p>",
+                f"<div style='font-size:.8rem;color:#8e8ea0;margin:8px 0 4px;'>"
+                f"  {len(queue)} file(s) staged</div>",
                 unsafe_allow_html=True,
             )
-
-            to_remove: list[int] = []
+            to_rm = []
             for idx, uf in enumerate(queue):
-                col_card, col_btn = st.columns([0.88, 0.12])
-                with col_card:
+                c1, c2 = st.columns([0.88, 0.12])
+                with c1:
                     st.markdown(
-                        f"""<div class="queue-chip">
-                              <span style="font-size:1.2rem;flex-shrink:0;">📄</span>
+                        f"""<div class="file-chip">
+                              <span class="chip-icon">📄</span>
                               <span class="chip-name">{uf.name}</span>
-                              <span class="chip-size">{_size_label(_file_mb(uf))}</span>
+                              <span class="chip-size">{_sz(_fmb(uf))}</span>
                             </div>""",
                         unsafe_allow_html=True,
                     )
-                with col_btn:
+                with c2:
                     st.markdown("<div style='margin-top:4px;'></div>", unsafe_allow_html=True)
-                    if st.button("✕", key=f"rm_{idx}_{uf.name}", help=f"Remove {uf.name}"):
-                        to_remove.append(idx)
+                    if st.button("✕", key=f"rm_{idx}_{uf.name}",
+                                 help=f"Remove {uf.name}"):
+                        to_rm.append(idx)
 
-            for i in sorted(to_remove, reverse=True):
+            for i in sorted(to_rm, reverse=True):
                 st.session_state["upload_queue"].pop(i)
-            if to_remove:
+            if to_rm:
                 st.rerun()
 
-            col_up, col_clr = st.columns([0.7, 0.3])
-            with col_up:
-                do_upload = st.button(
-                    f"⬆️ Upload {len(queue)} file(s)",
-                    type="primary",
-                    use_container_width=True,
-                )
-            with col_clr:
-                if st.button("🗑️ Clear All", use_container_width=True):
+            ca, cb = st.columns([.7, .3])
+            with ca:
+                if st.button(f"⬆️  Upload {len(queue)} file(s)",
+                             type="primary", use_container_width=True):
+                    results = loader.save_multiple_files(queue)
+                    st.session_state["last_results"] = results
+                    for r in results:
+                        if r.status == "uploaded":
+                            st.session_state["doc_library"][r.filename] = {
+                                "filename": r.filename, "size_mb": r.size_mb,
+                                "status": "Uploaded", "path": str(r.file_path),
+                            }
                     st.session_state["upload_queue"] = []
-                    st.session_state["last_results"]  = []
+                    st.rerun()
+            with cb:
+                if st.button("🗑  Clear", use_container_width=True):
+                    st.session_state["upload_queue"] = []
+                    st.session_state["last_results"] = []
                     st.rerun()
 
-            if do_upload:
-                results = loader.save_multiple_files(queue)
-                st.session_state["last_results"] = results
-                for r in results:
-                    if r.status == "uploaded":
-                        st.session_state["doc_library"][r.filename] = {
-                            "filename": r.filename,
-                            "size_mb":  r.size_mb,
-                            "status":   "Uploaded",
-                            "path":     str(r.file_path),
-                        }
-                st.session_state["upload_queue"] = []
-                st.rerun()
-        else:
-            st.markdown(
-                "<div style='text-align:center;padding:22px 0;color:#8e8ea0;font-size:0.88rem;'>"
-                "📂 No files staged. Pick PDFs above.</div>",
-                unsafe_allow_html=True,
-            )
+    # ── Quick-action chips ───────────────────────────────────
+    st.markdown(
+        """<div style="display:flex;gap:10px;justify-content:center;
+                       flex-wrap:wrap;margin:1.2rem 0 2rem;">
+             <div class="action-chip">📄 Upload PDF</div>
+             <div class="action-chip">💬 Ask a question</div>
+             <div class="action-chip">📊 Summarize document</div>
+             <div class="action-chip">🔍 Search content</div>
+           </div>""",
+        unsafe_allow_html=True,
+    )
 
-    # ── Result chips after upload ────────────────────────────
+    # ── Upload results ───────────────────────────────────────
     results = st.session_state.get("last_results", [])
     if results:
         n_ok  = sum(1 for r in results if r.status == "uploaded")
         n_dup = sum(1 for r in results if r.status == "duplicate")
         n_err = sum(1 for r in results if r.status == "error")
 
-        st.markdown("#### Last Upload Results")
-        for r in results:
-            badge = (
-                "<span class='chip-badge-new'>Saved</span>"      if r.status == "uploaded"  else
-                "<span class='chip-badge-dupe'>Duplicate</span>"  if r.status == "duplicate" else
-                "<span class='chip-badge-err'>Error</span>"
-            )
+        _, m2, _ = st.columns([1, 2.5, 1])
+        with m2:
+            st.markdown("**Last upload results**")
+            for r in results:
+                badge = (
+                    "<span class='chip-badge-new'>Saved</span>"
+                    if r.status == "uploaded" else
+                    "<span class='chip-badge-dupe'>Duplicate</span>"
+                    if r.status == "duplicate" else
+                    "<span class='chip-badge-err'>Error</span>"
+                )
+                st.markdown(
+                    f"""<div class="file-chip">
+                          <span class="chip-icon">📄</span>
+                          <span class="chip-name">{r.filename}</span>
+                          <span class="chip-size">{_sz(r.size_mb) if r.size_mb else '—'}</span>
+                          {badge}
+                        </div>""",
+                    unsafe_allow_html=True,
+                )
             st.markdown(
-                f"""<div class="file-chip">
-                      <span class="chip-icon">📄</span>
-                      <span class="chip-name">{r.filename}</span>
-                      <span class="chip-size">{_size_label(r.size_mb) if r.size_mb else "—"}</span>
-                      {badge}
+                f"""<div class="summary-row">
+                      <div class="s-card green">{n_ok}<div class="s-card-label">Uploaded</div></div>
+                      <div class="s-card yellow">{n_dup}<div class="s-card-label">Duplicate</div></div>
+                      <div class="s-card red">{n_err}<div class="s-card-label">Failed</div></div>
                     </div>""",
                 unsafe_allow_html=True,
             )
 
+
+# ════════════════════════════════════════════════════════════
+# DOCUMENTS VIEW
+# ════════════════════════════════════════════════════════════
+def view_documents():
+    docs: dict = st.session_state.get("doc_library", {})
+
+    st.markdown(
+        f"""<div class="section-hdr">
+              <h3>📚 Document Library</h3>
+              <span class="badge">{len(docs)} document(s)</span>
+            </div>""",
+        unsafe_allow_html=True,
+    )
+
+    if not docs:
         st.markdown(
-            f"""<div style="display:flex;gap:8px;margin-top:10px;">
-                  <div class="summary-card green" style="flex:1;">{n_ok}
-                    <div class="card-label">Uploaded</div></div>
-                  <div class="summary-card yellow" style="flex:1;">{n_dup}
-                    <div class="card-label">Duplicate</div></div>
-                  <div class="summary-card red" style="flex:1;">{n_err}
-                    <div class="card-label">Failed</div></div>
-                </div>""",
+            """<div style="text-align:center;padding:3rem;color:#8e8ea0;">
+                 <div style="font-size:2.5rem;margin-bottom:1rem;">📭</div>
+                 <div style="font-size:1rem;">No documents yet.</div>
+                 <div style="font-size:.85rem;margin-top:.4rem;">Upload PDFs from the home screen.</div>
+               </div>""",
             unsafe_allow_html=True,
         )
+        return
 
-# ════════════════════════════════════════════════════════════
-# DOCUMENT LIBRARY
-# ════════════════════════════════════════════════════════════
-def render_doc_library() -> None:
-    doc_library: dict = st.session_state.get("doc_library", {})
-
-    with st.container(border=True):
-        hc, cc = st.columns([0.75, 0.25])
-        with hc:
-            st.markdown("### 📚 Document Library")
-        with cc:
+    to_del = []
+    for doc in docs.values():
+        c1, c2 = st.columns([.92, .08])
+        with c1:
             st.markdown(
-                f"<div style='text-align:right;padding-top:6px;color:#10a37f;"
-                f"font-weight:700;'>{len(doc_library)} doc(s)</div>",
+                f"""<div class="lib-row">
+                      <span class="lib-icon">📄</span>
+                      <div class="lib-info">
+                        <div class="lib-name">{doc['filename']}</div>
+                        <div class="lib-meta">{_sz(doc['size_mb'])} · uploads/{doc['filename']}</div>
+                      </div>
+                      <span class="lib-badge">✔ {doc['status']}</span>
+                    </div>""",
                 unsafe_allow_html=True,
             )
+        with c2:
+            st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
+            if st.button("🗑", key=f"del_{doc['filename']}",
+                         help=f"Remove {doc['filename']}"):
+                to_del.append(doc["filename"])
 
-        if not doc_library:
-            st.markdown(
-                "<div style='text-align:center;padding:28px 0;color:#8e8ea0;font-size:0.88rem;'>"
-                "📭 Library empty — upload PDFs above.</div>",
-                unsafe_allow_html=True,
-            )
-            return
+    for f in to_del:
+        del st.session_state["doc_library"][f]
+    if to_del:
+        st.rerun()
 
-        to_delete: list[str] = []
-        for doc in doc_library.values():
-            cc2, dc = st.columns([0.9, 0.1])
-            with cc2:
-                st.markdown(
-                    f"""<div class="lib-row">
-                          <span class="lib-icon">📄</span>
-                          <div class="lib-info">
-                            <div class="lib-name">{doc['filename']}</div>
-                            <div class="lib-meta">
-                              {_size_label(doc['size_mb'])} · uploads/{doc['filename']}
-                            </div>
-                          </div>
-                          <span class="lib-badge">✔ {doc['status']}</span>
-                        </div>""",
-                    unsafe_allow_html=True,
-                )
-            with dc:
-                st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
-                if st.button("🗑", key=f"del_{doc['filename']}", help=f"Remove {doc['filename']}"):
-                    to_delete.append(doc["filename"])
-
-        for fname in to_delete:
-            del st.session_state["doc_library"][fname]
-        if to_delete:
-            st.rerun()
 
 # ════════════════════════════════════════════════════════════
-# RIGHT PANEL — System Overview + RAG Pipeline
+# SYSTEM VIEW  (right rail info, shown inline below main)
 # ════════════════════════════════════════════════════════════
-def render_right_panel() -> None:
+def view_system():
     doc_count = len(st.session_state.get("doc_library", {}))
 
-    with st.container(border=True):
-        st.markdown("### 🖥️ System Overview")
-        c1, c2 = st.columns(2)
-        c1.metric("Documents", doc_count)
-        c2.metric("Chunks", 0)
-        st.divider()
-        for icon, label, val in [
-            ("🧠", "Embedding Model", "MiniLM"),
-            ("🗄️",  "Vector Store",   "FAISS"),
-            ("✨",  "LLM",            "Gemini"),
-        ]:
-            st.markdown(
-                f"<div style='display:flex;justify-content:space-between;"
-                f"padding:4px 0;font-size:0.86rem;'>"
-                f"<span style='color:#8e8ea0;'>{icon} {label}</span>"
-                f"<span style='color:#10a37f;font-weight:600;'>{val}</span></div>",
-                unsafe_allow_html=True,
-            )
+    col1, col2 = st.columns(2, gap="medium")
 
-    with st.container(border=True):
-        st.markdown("### 🔄 RAG Pipeline")
-        steps = [
-            ("📤","Upload PDF"), ("📝","Extract Text"), ("✂️","Chunk Text"),
-            ("🔢","Embeddings"), ("🗄️","Store FAISS"),  ("❓","Ask Question"),
-            ("🔍","Retrieve"),   ("💬","Generate Answer"),
-        ]
-        for i, (icon, label) in enumerate(steps):
-            st.markdown(
-                f"<div class='workflow-step'>{icon}&nbsp;{label}</div>",
-                unsafe_allow_html=True,
-            )
-            if i < len(steps) - 1:
-                st.markdown("<div class='workflow-arrow'>↓</div>", unsafe_allow_html=True)
+    with col1:
+        with st.container(border=True):
+            st.markdown("### 🖥️ System Overview")
+            m1, m2 = st.columns(2)
+            m1.metric("Documents", doc_count)
+            m2.metric("Chunks", 0)
+            st.divider()
+            for icon, label, val in [
+                ("🧠", "Embedding", "MiniLM"),
+                ("🗄️",  "Vector DB",  "FAISS"),
+                ("✨",  "LLM",        "Gemini"),
+            ]:
+                st.markdown(
+                    f"<div style='display:flex;justify-content:space-between;"
+                    f"padding:4px 0;font-size:.86rem;'>"
+                    f"<span style='color:#8e8ea0;'>{icon} {label}</span>"
+                    f"<span style='color:#10a37f;font-weight:600;'>{val}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+    with col2:
+        with st.container(border=True):
+            st.markdown("### 🔄 RAG Pipeline")
+            steps = [
+                ("📤","Upload PDF"), ("📝","Extract Text"), ("✂️","Chunk"),
+                ("🔢","Embed"),      ("🗄️","Store FAISS"),  ("❓","Query"),
+                ("🔍","Retrieve"),   ("💬","Generate"),
+            ]
+            for i, (ic, lb) in enumerate(steps):
+                st.markdown(
+                    f"<div class='wf-step'>{ic}&nbsp;{lb}</div>",
+                    unsafe_allow_html=True,
+                )
+                if i < len(steps) - 1:
+                    st.markdown("<div class='wf-arrow'>↓</div>", unsafe_allow_html=True)
+
 
 # ════════════════════════════════════════════════════════════
 # MAIN
 # ════════════════════════════════════════════════════════════
-def main() -> None:
-    inject_css()
-    init_session_state()
-    render_sidebar()
+def main():
+    _css()
+    _init()
+    sidebar()
 
-    st.markdown(
-        "<h1 style='margin-bottom:0;'>📚 AI Document Assistant</h1>",
-        unsafe_allow_html=True,
+    # Tab navigation (replaces the old column layout)
+    tab_home, tab_docs, tab_system = st.tabs(
+        ["🏠 Home", "📚 Documents", "⚙️ System"]
     )
-    st.markdown(
-        "<p style='color:#8e8ea0;font-size:0.94rem;margin-top:3px;margin-bottom:12px;'>"
-        "Chat with your PDFs using Retrieval-Augmented Generation (RAG)</p>",
-        unsafe_allow_html=True,
-    )
-    st.divider()
 
-    left, right = st.columns([0.65, 0.35], gap="large")
-    with left:
-        render_upload_panel()
-        st.markdown("<div style='height:10px;'></div>", unsafe_allow_html=True)
-        render_doc_library()
-    with right:
-        render_right_panel()
+    with tab_home:
+        view_home()
+
+    with tab_docs:
+        st.markdown("<div style='padding:1rem 0;'></div>", unsafe_allow_html=True)
+        view_documents()
+
+    with tab_system:
+        st.markdown("<div style='padding:1rem 0;'></div>", unsafe_allow_html=True)
+        view_system()
 
 
 if __name__ == "__main__":
