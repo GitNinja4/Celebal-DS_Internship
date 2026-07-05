@@ -54,101 +54,143 @@ def _file_mb(uf) -> float:
 # Do NOT set overflow:hidden on the sidebar — that kills scrolling.
 # ════════════════════════════════════════════════════════════
 def render_sidebar() -> None:
+    """
+    ChatGPT-style sidebar:
+      • First child  → sticky top  (brand + actions)
+      • Middle       → scrollable  (nav + live doc list + status)
+      • Last child   → sticky bot  (user profile)
+
+    Each zone is ONE st.markdown call so CSS :first-child / :last-child
+    can pin them. The middle uses a <div class='sb-scroll-middle'> which
+    the CSS gives flex:1 + overflow-y:auto.
+    """
     doc_library: dict = st.session_state.get("doc_library", {})
     n = len(doc_library)
 
+    # Build the document rows HTML from live session state
+    if doc_library:
+        doc_rows_html = "".join(
+            f"""<div style="display:flex;align-items:center;gap:9px;
+                            padding:8px 10px;border-radius:8px;font-size:0.85rem;
+                            color:{'#ffffff' if i==0 else '#c5c5c5'};
+                            background:{'#2f2f2f' if i==0 else 'transparent'};
+                            font-weight:{'500' if i==0 else '400'};
+                            margin-bottom:1px;cursor:pointer;
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  <span style="flex-shrink:0;">📄</span>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                      {fname if len(fname)<=26 else fname[:23]+'…'}
+                  </span>
+                </div>"""
+            for i, fname in enumerate(doc_library)
+        )
+    else:
+        doc_rows_html = (
+            "<div style='padding:5px 10px 8px;font-size:0.82rem;color:#8e8ea0;'>"
+            "No documents yet</div>"
+        )
+
     with st.sidebar:
 
-        # ── STICKY TOP ───────────────────────────────────────
+        # ── 1. STICKY TOP ────────────────────────────────────
         st.markdown(
-            """
-            <div class="sb-sticky-top">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                <div style="width:34px;height:34px;background:#10a37f;border-radius:50%;
-                            display:flex;align-items:center;justify-content:center;
-                            font-size:1.1rem;flex-shrink:0;">📚</div>
-                <span style="font-size:0.97rem;font-weight:700;color:#ececec;">
-                  AI Document Assistant
-                </span>
-              </div>
-              <div class="sb-action-row">
-                <span>✏️</span><span>New Session</span>
-              </div>
-              <div class="sb-action-row">
-                <span>🔍</span><span>Search documents</span>
-              </div>
-            </div>
-            """,
+            """<div style="position:sticky;top:0;z-index:100;
+                           background:#171717;padding:16px 6px 10px 6px;
+                           border-bottom:1px solid #2a2a2a;">
+                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                   <div style="width:34px;height:34px;background:#10a37f;border-radius:50%;
+                               display:flex;align-items:center;justify-content:center;
+                               font-size:1.1rem;flex-shrink:0;">📚</div>
+                   <span style="font-size:0.96rem;font-weight:700;color:#ececec;">
+                     AI Document Assistant
+                   </span>
+                 </div>
+                 <div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
+                             border-radius:8px;font-size:0.87rem;color:#c5c5c5;
+                             cursor:pointer;margin-bottom:2px;">
+                   <span>✏️</span><span>New Session</span>
+                 </div>
+                 <div style="display:flex;align-items:center;gap:10px;padding:8px 8px;
+                             border-radius:8px;font-size:0.87rem;color:#c5c5c5;
+                             cursor:pointer;">
+                   <span>🔍</span><span>Search documents</span>
+                 </div>
+               </div>""",
             unsafe_allow_html=True,
         )
 
-        # ── MIDDLE: Navigation ────────────────────────────────
+        # ── 2. SCROLLABLE MIDDLE ─────────────────────────────
         st.markdown(
-            """
-            <div class="sb-label">Navigation</div>
-            <div class="sb-item">
-              <span class="sb-item-icon">💬</span>
-              <span class="sb-item-text">Chat</span>
-            </div>
-            <div class="sb-item">
-              <span class="sb-item-icon">⚙️</span>
-              <span class="sb-item-text">Settings</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            f"""<div style="padding:8px 6px;">
 
-        # ── MIDDLE: Document list ─────────────────────────────
-        st.markdown(
-            f"""<div class="sb-label">
-                  📁 Documents
-                  <span style="color:#10a37f;margin-left:5px;font-weight:700;">{n}</span>
+                  <!-- Navigation -->
+                  <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
+                               text-transform:uppercase;letter-spacing:0.07em;
+                               padding:8px 8px 4px 8px;">Navigation</div>
+                  <div style="display:flex;align-items:center;gap:9px;
+                              padding:8px 10px;border-radius:8px;font-size:0.86rem;
+                              color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
+                    💬 &nbsp;Chat
+                  </div>
+                  <div style="display:flex;align-items:center;gap:9px;
+                              padding:8px 10px;border-radius:8px;font-size:0.86rem;
+                              color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
+                    ⚙️ &nbsp;Settings
+                  </div>
+
+                  <!-- Documents -->
+                  <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
+                               text-transform:uppercase;letter-spacing:0.07em;
+                               padding:12px 8px 4px 8px;">
+                    📁 Documents
+                    <span style="color:#10a37f;margin-left:5px;font-weight:700;">{n}</span>
+                  </div>
+                  {doc_rows_html}
+
+                  <!-- System Status -->
+                  <div style="border-top:1px solid #2a2a2a;margin-top:8px;padding-top:4px;">
+                    <div style="font-size:0.70rem;font-weight:600;color:#8e8ea0;
+                                 text-transform:uppercase;letter-spacing:0.07em;
+                                 padding:8px 8px 4px 8px;">System Status</div>
+                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
+                        🟢 Gemini API
+                    </div>
+                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
+                        🟢 FAISS Vector DB
+                    </div>
+                    <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">
+                        🟢 Embedding Model
+                    </div>
+                  </div>
+
+                  <!-- Bottom spacer so sticky-bottom doesn't overlap content -->
+                  <div style="height:80px;"></div>
                 </div>""",
             unsafe_allow_html=True,
         )
 
-        if doc_library:
-            for i, fname in enumerate(doc_library):
-                short = fname if len(fname) <= 26 else fname[:23] + "…"
-                active_cls = "sb-active" if i == 0 else ""
-                st.markdown(
-                    f"""<div class="sb-item {active_cls}">
-                          <span class="sb-item-icon">📄</span>
-                          <span class="sb-item-text">{short}</span>
-                        </div>""",
-                    unsafe_allow_html=True,
-                )
-        else:
-            st.markdown(
-                "<div style='padding:5px 10px 8px;font-size:0.82rem;color:#8e8ea0;'>"
-                "No documents yet</div>",
-                unsafe_allow_html=True,
-            )
-
-        # ── MIDDLE: System status ─────────────────────────────
+        # ── 3. STICKY BOTTOM ─────────────────────────────────
         st.markdown(
-            """
-            <div class="sb-label" style="margin-top:6px;">System Status</div>
-            <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">🟢 Gemini API</div>
-            <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">🟢 FAISS Vector DB</div>
-            <div style="padding:4px 10px;font-size:0.84rem;color:#a7f3d0;">🟢 Embedding Model</div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # ── STICKY BOTTOM ─────────────────────────────────────
-        st.markdown(
-            """
-            <div class="sb-sticky-bottom">
-              <div class="sb-user">
-                <div class="sb-avatar">AA</div>
-                <div style="min-width:0;">
-                  <div style="font-size:0.87rem;font-weight:600;color:#ececec;">Aditya Anand</div>
-                  <div style="font-size:0.71rem;color:#8e8ea0;margin-top:1px;">v1.0 · Celebal Internship</div>
-                </div>
-              </div>
-            </div>
-            """,
+            """<div style="position:sticky;bottom:0;z-index:100;
+                           background:#171717;padding:10px 6px 16px 6px;
+                           border-top:1px solid #2a2a2a;">
+                 <div style="display:flex;align-items:center;gap:10px;
+                             padding:7px 8px;border-radius:10px;cursor:pointer;">
+                   <div style="width:34px;height:34px;
+                               background:linear-gradient(135deg,#10a37f,#0d6efd);
+                               border-radius:50%;display:flex;align-items:center;
+                               justify-content:center;font-size:0.82rem;
+                               font-weight:700;color:#fff;flex-shrink:0;">AA</div>
+                   <div style="min-width:0;">
+                     <div style="font-size:0.87rem;font-weight:600;color:#ececec;">
+                       Aditya Anand
+                     </div>
+                     <div style="font-size:0.71rem;color:#8e8ea0;margin-top:1px;">
+                       v1.0 · Celebal Internship
+                     </div>
+                   </div>
+                 </div>
+               </div>""",
             unsafe_allow_html=True,
         )
 
