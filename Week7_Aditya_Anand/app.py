@@ -1,10 +1,11 @@
 """
 AI Document Assistant - Streamlit Entry Point
-Phase 2: UI Layout (no RAG logic yet)
+Phase 3: PDF upload and document management.
 Developer: Aditya Anand
 """
 
 import streamlit as st
+from rag.pdf_loader import PDFLoader
 
 # ─────────────────────────────────────────────
 # PAGE CONFIGURATION
@@ -50,9 +51,17 @@ def render_sidebar():
 # LEFT COLUMN — Upload & Document Info
 # ─────────────────────────────────────────────
 def render_upload_section():
-    # Upload Document container
+    """
+    Renders the PDF upload widget and Document Information panel.
+    Handles save, duplicate detection, validation errors, and metadata display.
+    """
+    loader = PDFLoader()
+
+    # ── Upload Document container ──────────────
     with st.container(border=True):
         st.subheader("📄 Upload Document")
+
+        # Streamlit file uploader — PDF only
         uploaded_file = st.file_uploader(
             label="Choose a PDF file",
             type=["pdf"],
@@ -62,7 +71,41 @@ def render_upload_section():
         if uploaded_file is None:
             st.info("No PDF uploaded.")
 
-    # Document Information container
+    # ── Process upload when a file is present ──
+    metadata = None
+
+    if uploaded_file is not None:
+        try:
+            # Track filenames saved in this browser session
+            if "saved_files" not in st.session_state:
+                st.session_state["saved_files"] = set()
+
+            filename_candidate: str = uploaded_file.name
+            dest_path = loader.upload_dir / filename_candidate
+
+            # Duplicate: file already on disk (from a previous session or run)
+            is_duplicate: bool = dest_path.exists()
+
+            # save_uploaded_file will not overwrite; returns the path either way
+            file_path, filename = loader.save_uploaded_file(uploaded_file)
+
+            if is_duplicate:
+                st.warning("⚠️ This document already exists. Showing existing file.")
+            else:
+                st.success("✅ PDF uploaded successfully. Ready for text extraction.")
+                st.session_state["saved_files"].add(filename)
+
+            # Fetch metadata for display
+            metadata = loader.get_pdf_metadata(file_path)
+            metadata["path"] = str(file_path)
+
+        except ValueError as exc:
+            # Wrong file type — guards against programmatic misuse
+            st.error(f"❌ Invalid file: {exc}")
+        except (IOError, FileNotFoundError) as exc:
+            st.error(f"❌ File error: {exc}")
+
+    # ── Document Information container ─────────
     with st.container(border=True):
         st.subheader("📋 Document Information")
 
@@ -70,13 +113,25 @@ def render_upload_section():
         with col_a:
             st.markdown("**Filename:**")
             st.markdown("**Pages:**")
-            st.markdown("**Size:**")
+            st.markdown("**Size (MB):**")
             st.markdown("**Status:**")
+            st.markdown("**Path:**")
+
         with col_b:
-            st.markdown("—")
-            st.markdown("—")
-            st.markdown("—")
-            st.markdown("⏳ Waiting for upload")
+            if metadata:
+                st.markdown(metadata["filename"])
+                st.markdown("—")          # Page count added in Phase 4
+                st.markdown(str(metadata["size_mb"]))
+                st.markdown(f"✅ {metadata['status']}")
+                st.markdown(f"`{metadata['path']}`")
+
+                st.info("📌 PDF uploaded successfully. Ready for text extraction.")
+            else:
+                st.markdown("—")
+                st.markdown("—")
+                st.markdown("—")
+                st.markdown("⏳ Waiting for upload")
+                st.markdown("—")
 
     return uploaded_file
 
