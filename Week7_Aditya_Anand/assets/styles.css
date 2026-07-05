@@ -1,1 +1,264 @@
-/* TODO: Add custom Streamlit styles */
+/* ============================================================
+   AI Document Assistant — Global Dark Theme
+   Inspired by ChatGPT / modern AI chat apps
+   ============================================================ */
+
+/* ── Base & background ───────────────────────────────────── */
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #212121 !important;
+    color: #ececec !important;
+    font-family: 'Söhne', 'ui-sans-serif', 'system-ui', sans-serif;
+}
+
+[data-testid="stMain"], .main .block-container {
+    background-color: #212121 !important;
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    max-width: 1200px;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background-color: #171717 !important;
+    border-right: 1px solid #2f2f2f;
+}
+
+[data-testid="stSidebar"] * {
+    color: #ececec !important;
+}
+
+[data-testid="stSidebarNav"] {
+    display: none;
+}
+
+/* ── Headings ────────────────────────────────────────────── */
+h1 { color: #ffffff !important; font-size: 1.9rem !important; font-weight: 700 !important; }
+h2 { color: #ffffff !important; font-size: 1.4rem !important; font-weight: 600 !important; }
+h3 { color: #ececec !important; font-size: 1.1rem !important; font-weight: 600 !important; }
+h4, h5, h6 { color: #c5c5c5 !important; }
+
+p, li, span, label { color: #ececec !important; }
+
+/* ── Cards / Containers ──────────────────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: #2f2f2f !important;
+    border: 1px solid #3f3f3f !important;
+    border-radius: 12px !important;
+    padding: 1rem !important;
+}
+
+/* ── File uploader ───────────────────────────────────────── */
+[data-testid="stFileUploader"] {
+    background-color: #2f2f2f !important;
+    border: 2px dashed #4f4f4f !important;
+    border-radius: 12px !important;
+    padding: 1.2rem !important;
+    transition: border-color 0.2s ease;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: #10a37f !important;
+}
+
+[data-testid="stFileUploaderDropzone"] {
+    background-color: transparent !important;
+}
+
+[data-testid="stFileUploaderDropzoneInstructions"] * {
+    color: #8e8ea0 !important;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+[data-testid="stBaseButton-secondary"] {
+    background-color: #2f2f2f !important;
+    color: #ececec !important;
+    border: 1px solid #4f4f4f !important;
+    border-radius: 8px !important;
+    transition: background-color 0.2s;
+}
+
+[data-testid="stBaseButton-secondary"]:hover {
+    background-color: #3f3f3f !important;
+    border-color: #10a37f !important;
+}
+
+[data-testid="stBaseButton-primary"] {
+    background-color: #10a37f !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+}
+
+[data-testid="stBaseButton-primary"]:hover {
+    background-color: #0d8f6f !important;
+}
+
+/* ── Metrics ─────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background-color: #3f3f3f !important;
+    border-radius: 10px !important;
+    padding: 0.75rem 1rem !important;
+    border: 1px solid #4a4a4a !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #10a37f !important;
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #8e8ea0 !important;
+    font-size: 0.78rem !important;
+}
+
+/* ── Dataframe / Table ───────────────────────────────────── */
+[data-testid="stDataFrame"] {
+    background-color: #2f2f2f !important;
+    border-radius: 10px !important;
+    overflow: hidden;
+}
+
+/* ── Alerts ──────────────────────────────────────────────── */
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+    border-left-width: 4px !important;
+}
+
+/* success */
+[data-testid="stAlert"][data-baseweb="notification"][kind="positive"],
+.element-container .stSuccess {
+    background-color: #0d2e23 !important;
+    border-left-color: #10a37f !important;
+    color: #a7f3d0 !important;
+}
+
+/* warning */
+.element-container .stWarning {
+    background-color: #2e2000 !important;
+    border-left-color: #f59e0b !important;
+}
+
+/* error */
+.element-container .stError {
+    background-color: #2e0d0d !important;
+    border-left-color: #ef4444 !important;
+}
+
+/* info */
+.element-container .stInfo {
+    background-color: #1a2332 !important;
+    border-left-color: #3b82f6 !important;
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+hr {
+    border-color: #3f3f3f !important;
+    margin: 0.8rem 0 !important;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #171717; }
+::-webkit-scrollbar-thumb { background: #4f4f4f; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #10a37f; }
+
+/* ── File chip cards (injected via st.markdown) ──────────── */
+.file-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #3f3f3f;
+    border: 1px solid #4f4f4f;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.file-chip .chip-icon  { font-size: 1.3rem; flex-shrink: 0; }
+.file-chip .chip-name  { flex: 1; color: #ececec; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file-chip .chip-size  { color: #8e8ea0; font-size: 0.78rem; flex-shrink: 0; }
+.file-chip .chip-badge-new  { background: #0d2e23; color: #10a37f; border: 1px solid #10a37f; border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; flex-shrink: 0; }
+.file-chip .chip-badge-dupe { background: #2e2000; color: #f59e0b; border: 1px solid #f59e0b; border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; flex-shrink: 0; }
+.file-chip .chip-badge-err  { background: #2e0d0d; color: #ef4444; border: 1px solid #ef4444; border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; flex-shrink: 0; }
+
+/* ── Queue chip (pre-save staged files) ──────────────────── */
+.queue-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #2f2f2f;
+    border: 1px solid #4f4f4f;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+}
+.queue-chip .chip-name { flex: 1; color: #ececec; font-size: 0.9rem; font-weight: 500; }
+.queue-chip .chip-size { color: #8e8ea0; font-size: 0.78rem; }
+
+/* ── Library row ─────────────────────────────────────────── */
+.lib-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #2f2f2f;
+    border: 1px solid #3f3f3f;
+    border-radius: 10px;
+    padding: 10px 16px;
+    margin-bottom: 8px;
+}
+.lib-row .lib-icon  { font-size: 1.4rem; flex-shrink: 0; }
+.lib-row .lib-info  { flex: 1; }
+.lib-row .lib-name  { color: #ececec; font-weight: 600; font-size: 0.92rem; }
+.lib-row .lib-meta  { color: #8e8ea0; font-size: 0.76rem; margin-top: 2px; }
+.lib-row .lib-badge { background: #0d2e23; color: #10a37f; border: 1px solid #10a37f; border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+
+/* ── Summary cards ───────────────────────────────────────── */
+.summary-card {
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+.summary-card.green { background: #0d2e23; border: 1px solid #10a37f; color: #10a37f; }
+.summary-card.yellow{ background: #2e2000; border: 1px solid #f59e0b; color: #f59e0b; }
+.summary-card.red   { background: #2e0d0d; border: 1px solid #ef4444; color: #ef4444; }
+.summary-card .card-label { font-size: 0.72rem; font-weight: 400; color: #8e8ea0; margin-top: 4px; }
+
+/* ── Sidebar doc list ────────────────────────────────────── */
+.sidebar-doc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    color: #c5c5c5 !important;
+    transition: background 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sidebar-doc:hover { background: #2f2f2f; }
+
+/* ── Workflow steps ──────────────────────────────────────── */
+.workflow-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #2f2f2f;
+    border-left: 3px solid #10a37f;
+    border-radius: 0 8px 8px 0;
+    padding: 8px 14px;
+    margin-bottom: 4px;
+    font-size: 0.88rem;
+    color: #ececec;
+}
+.workflow-arrow {
+    text-align: center;
+    color: #4f4f4f;
+    font-size: 1rem;
+    margin-bottom: 4px;
+}
