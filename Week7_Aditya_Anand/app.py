@@ -72,103 +72,184 @@ def _file_size_mb(uf) -> float:
 # ─────────────────────────────────────────────
 def render_sidebar() -> None:
     """
-    ChatGPT-style sidebar with three fixed zones:
-      TOP    — brand + New chat + Search  (never scrolls)
-      MIDDLE — navigation items + document list  (scrolls when overflow)
-      BOTTOM — user profile pill  (always pinned at bottom)
+    ChatGPT-style sidebar:
+      TOP    — brand + actions  (pinned, never scrolls)
+      MIDDLE — nav + doc list   (scrolls on overflow)
+      BOTTOM — user profile     (pinned at bottom)
+
+    Layout achieved by injecting a wrapper div via CSS that targets
+    Streamlit's own sidebar content block, combined with individual
+    st.markdown calls for each section — avoids the HTML-stripping
+    issue Streamlit applies to large injected HTML blobs.
     """
     doc_library: dict = st.session_state.get("doc_library", {})
     doc_count = len(doc_library)
 
-    # ── Build the scrollable middle section HTML ──────────────
-    # Nav items
-    nav_html = """
-        <div class='sb-nav-item'>
-            <span>💬</span><span>Chat</span>
-        </div>
-        <div class='sb-nav-item'>
-            <span>⚙️</span><span>Settings</span>
-        </div>
-    """
-
-    # Documents section label + list
-    if doc_library:
-        doc_items = "".join(
-            f"""<div class='sb-doc-item{"  active" if i == 0 else ""}'>
-                    <span class='sb-doc-icon'>📄</span>
-                    <span class='sb-doc-name'>{fname if len(fname) <= 30 else fname[:27] + "…"}</span>
-                </div>"""
-            for i, fname in enumerate(doc_library)
-        )
-        docs_section = f"""
-            <div class='sb-section-label'>📁 Documents &nbsp;
-                <span style='color:#10a37f;font-weight:700;'>{doc_count}</span>
-            </div>
-            {doc_items}
-        """
-    else:
-        docs_section = """
-            <div class='sb-section-label'>📁 Documents</div>
-            <div style='padding:8px 10px;font-size:0.82rem;color:#8e8ea0;'>
-                No documents uploaded yet
-            </div>
-        """
-
-    # ── System status (inside scrollable middle) ──────────────
-    status_html = """
-        <div class='sb-section-label'>System Status</div>
-        <div class='sb-doc-item' style='cursor:default;'>
-            <span>🟢</span><span>Gemini API</span>
-        </div>
-        <div class='sb-doc-item' style='cursor:default;'>
-            <span>🟢</span><span>FAISS Vector DB</span>
-        </div>
-        <div class='sb-doc-item' style='cursor:default;'>
-            <span>🟢</span><span>Embedding Model</span>
-        </div>
-    """
-
-    # ── Assemble full sidebar HTML ────────────────────────────
-    sidebar_html = f"""
-    <!-- TOP: brand + actions — fixed, never scrolls -->
-    <div class='sb-top'>
-        <div class='sb-brand'>
-            <div class='sb-brand-title'>
-                <div class='sb-brand-icon'>📚</div>
-                AI Document Assistant
-            </div>
-        </div>
-        <div class='sb-action'>
-            <span class='sb-action-icon'>✏️</span>
-            <span>New Session</span>
-        </div>
-        <div class='sb-action'>
-            <span class='sb-action-icon'>🔍</span>
-            <span>Search documents</span>
-        </div>
-    </div>
-
-    <!-- MIDDLE: nav + docs + status — scrollable when overflow -->
-    <div class='sb-middle'>
-        {nav_html}
-        {docs_section}
-        {status_html}
-    </div>
-
-    <!-- BOTTOM: user profile — always pinned -->
-    <div class='sb-bottom'>
-        <div class='sb-user'>
-            <div class='sb-avatar'>AA</div>
-            <div class='sb-user-info'>
-                <div class='sb-user-name'>Aditya Anand</div>
-                <div class='sb-user-sub'>v1.0 · Celebal Internship</div>
-            </div>
-        </div>
-    </div>
-    """
-
     with st.sidebar:
-        st.markdown(sidebar_html, unsafe_allow_html=True)
+
+        # ── TOP: Brand ────────────────────────────────────────
+        st.markdown(
+            """
+            <div style="display:flex;align-items:center;gap:10px;
+                        padding:18px 4px 4px 4px;margin-bottom:4px;">
+                <div style="width:34px;height:34px;background:#10a37f;border-radius:50%;
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:1.1rem;flex-shrink:0;">📚</div>
+                <span style="font-size:1rem;font-weight:700;color:#ececec;">
+                    AI Document Assistant
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── TOP: Action buttons ───────────────────────────────
+        st.markdown(
+            """
+            <div style="margin-bottom:2px;">
+                <div style="display:flex;align-items:center;gap:10px;
+                            padding:9px 8px;border-radius:8px;font-size:0.88rem;
+                            color:#c5c5c5;cursor:pointer;transition:background 0.15s;"
+                     onmouseover="this.style.background='#2a2a2a'"
+                     onmouseout="this.style.background='transparent'">
+                    <span style="width:20px;text-align:center;">✏️</span>
+                    <span>New Session</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;
+                            padding:9px 8px;border-radius:8px;font-size:0.88rem;
+                            color:#c5c5c5;cursor:pointer;"
+                     onmouseover="this.style.background='#2a2a2a'"
+                     onmouseout="this.style.background='transparent'">
+                    <span style="width:20px;text-align:center;">🔍</span>
+                    <span>Search documents</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            "<hr style='border:none;border-top:1px solid #2a2a2a;margin:8px 0;'/>",
+            unsafe_allow_html=True,
+        )
+
+        # ── MIDDLE: Nav items ─────────────────────────────────
+        st.markdown(
+            """
+            <div style="font-size:0.72rem;font-weight:600;color:#8e8ea0;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        padding:4px 8px 6px 8px;">Navigation</div>
+            <div style="display:flex;align-items:center;gap:9px;
+                        padding:8px 10px;border-radius:8px;font-size:0.86rem;
+                        color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
+                💬 &nbsp; Chat
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;
+                        padding:8px 10px;border-radius:8px;font-size:0.86rem;
+                        color:#c5c5c5;margin-bottom:1px;cursor:pointer;">
+                ⚙️ &nbsp; Settings
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── MIDDLE: Document list — scrollable section ────────
+        st.markdown(
+            f"""
+            <div style="font-size:0.72rem;font-weight:600;color:#8e8ea0;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        padding:12px 8px 6px 8px;">
+                📁 Documents
+                <span style="color:#10a37f;font-weight:700;margin-left:4px;">
+                    {doc_count}
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # The document list lives in a scrollable container
+        # max-height keeps it bounded; bottom sections stay visible
+        if doc_library:
+            doc_rows = "".join(
+                f"""<div style="display:flex;align-items:center;gap:9px;
+                                padding:7px 10px;border-radius:8px;font-size:0.84rem;
+                                color:#c5c5c5;white-space:nowrap;overflow:hidden;
+                                text-overflow:ellipsis;margin-bottom:1px;
+                                {'background:#2f2f2f;color:#fff;' if i == 0 else ''}
+                                cursor:pointer;">
+                        <span style="flex-shrink:0;">📄</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            {fname if len(fname) <= 28 else fname[:25] + '…'}
+                        </span>
+                    </div>"""
+                for i, fname in enumerate(doc_library)
+            )
+            st.markdown(
+                f"""<div style="max-height:220px;overflow-y:auto;overflow-x:hidden;
+                               padding-right:2px;margin-bottom:4px;">
+                        {doc_rows}
+                    </div>""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                "<div style='padding:6px 10px 10px;font-size:0.82rem;color:#8e8ea0;'>"
+                "No documents uploaded yet</div>",
+                unsafe_allow_html=True,
+            )
+
+        # ── MIDDLE: System Status ─────────────────────────────
+        st.markdown(
+            "<hr style='border:none;border-top:1px solid #2a2a2a;margin:8px 0;'/>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <div style="font-size:0.72rem;font-weight:600;color:#8e8ea0;
+                        text-transform:uppercase;letter-spacing:0.06em;
+                        padding:4px 8px 6px 8px;">System Status</div>
+            <div style="padding:5px 10px;font-size:0.84rem;color:#a7f3d0;">
+                🟢 &nbsp;Gemini API
+            </div>
+            <div style="padding:5px 10px;font-size:0.84rem;color:#a7f3d0;">
+                🟢 &nbsp;FAISS Vector DB
+            </div>
+            <div style="padding:5px 10px;font-size:0.84rem;color:#a7f3d0;">
+                🟢 &nbsp;Embedding Model
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── BOTTOM: User profile — pushed to bottom with spacer ──
+        # st.empty() + CSS margin-top:auto equivalent using a spacer
+        st.markdown("<div style='flex:1;min-height:20px;'></div>", unsafe_allow_html=True)
+        st.markdown(
+            "<hr style='border:none;border-top:1px solid #2a2a2a;margin:8px 0 10px 0;'/>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            """
+            <div style="display:flex;align-items:center;gap:10px;
+                        padding:8px 8px 16px 8px;cursor:pointer;border-radius:10px;">
+                <div style="width:34px;height:34px;
+                            background:linear-gradient(135deg,#10a37f,#0d6efd);
+                            border-radius:50%;display:flex;align-items:center;
+                            justify-content:center;font-size:0.85rem;font-weight:700;
+                            color:#fff;flex-shrink:0;">AA</div>
+                <div style="min-width:0;">
+                    <div style="font-size:0.88rem;font-weight:600;color:#ececec;">
+                        Aditya Anand
+                    </div>
+                    <div style="font-size:0.72rem;color:#8e8ea0;margin-top:1px;">
+                        v1.0 · Celebal Internship
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ─────────────────────────────────────────────
 # UPLOAD QUEUE PANEL
