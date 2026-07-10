@@ -1,0 +1,16 @@
+langchain
+langchain-google-genai
+google-generativeai
+pandas
+numpy
+openpyxl
+matplotlib
+seaborn
+plotly
+streamlit
+faiss-cpu
+langchain-community
+python-dotenv
+requests
+beautifulsoup4
+langchain-text-splitters

@@ -1,0 +1,17 @@
+region,product,month,sales,units_sold
+North,Widget A,January,12000,240
+North,Widget B,January,8500,170
+South,Widget A,January,9500,190
+South,Widget B,January,7200,144
+East,Widget A,January,11000,220
+East,Widget B,January,6800,136
+West,Widget A,January,8000,160
+West,Widget B,January,5400,108
+North,Widget A,February,13500,270
+North,Widget B,February,9100,182
+South,Widget A,February,9800,196
+South,Widget B,February,7600,152
+East,Widget A,February,10500,210
+East,Widget B,February,7000,140
+West,Widget A,February,8300,166
+West,Widget B,February,N/A,0
